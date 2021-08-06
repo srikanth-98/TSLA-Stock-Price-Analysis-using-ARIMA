@@ -1,0 +1,321 @@
+---
+title: "TSLA Stock Price Prediction."
+author: "Ramachandra Srikanth Naradasu"
+output: pdf_document
+---
+## **Executive Summary**
+Stock analysis is a method for investors and traders to make buying and selling decisions. By studying and evaluating past and current data, investors and traders attempt to gain an edge in the markets by making informed decisions. There are two basic types of stock analysis:fundamental analysis and technical analysis. In this paper,The main focus is on TSLA Stock Price value. TSLA Stock price has been on the rice recently, with a +100% spike in the last few months.The year wise trend of stock price gives a basic view of stock value over years. Since this is a time series analysis, using ARIMA to generate the model and forecast the stock price value. This Dataset Contains 2518 Observations or (trading days) and it has 7 variables. I’m going to perform Multiple linear regression model to estimate the TSLA stock close price and perform ARIMA model on this time series data to forecast and predict the Future TSLA stock price value. From the interpretation of the model it can be concluded that there are several other factors other than the variables in the dataset for the increase in the price of the stock value.
+The goal of this project is to estimate the relationship between the close variable and other variables and predict the close price value of TSLA stock by forecasting the generated ARIMA model.
+
+\newpage
+
+
+## **A. Introduction**
+Tesla Inc. designs, develops, manufactures, and sells electric vehicles and stationary energy storage products. Tesla shares are now up roughly 260% year to date. The Tesla stock price values are collected from Yahoo Finance. 
+
+This data can help predict the relationship between variables and generate the time series plot. The trend of the variables across the years are analyzed and informed decisions are made in future based on the historical data.
+
+This data helps in estimating the growth of the company and necessary changes to be made for the better value.  Here, The main focus is on the Close price of the TSLA Stocks because the close price is used in predicting the future price.
+
+```{r setup, inclde=FALSE,echo=FALSE,error=FALSE,warning=FALSE}
+#Loading and installing the packages
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(tinytex,dplyr,e1071,dominanceanalysis,randomForest,ggpubr,DMwR,reshape2,ggplot2,leaps,caret,nnet,forecast,foreign,MASS,Hmisc,gbm,urca,gridExtra,tidyr,scales,magrittr,ggfortify,scales,purrr,patchwork,tseries,xts,tsibble,feasts,lubridate)
+theme_set(theme_minimal())
+```
+
+```{r data, error=FALSE, warning=FALSE, inclde=FALSE, include=FALSE}
+#Load the data into R and just look at the basic structure and summary of the dataset
+tsla <- read.csv("Tesla.csv",na.strings = "")
+str(tsla)
+
+#Gives the summary of the data
+summary(tsla)
+describe(tsla)
+```
+## **B. Data Description**
+The TSLA dataset contains 2518 observsations or (Trading days) between August 16,2010 and August 14,2020. This is a time series data with irregular interval of date. This dataset contains the information about the Open, High, Low, Close, Adj.Close, Volume. 
+All variables except Data are numeric type. The max, min and median values of each variable are calculated. 
+
+```{r preprocessing, error=FALSE, warning=FALSE, inclde=FALSE, include=FALSE, paged.print=FALSE}
+#Converting the date column into date class
+tsla$Date <- as.Date(tsla$Date,format = "%d/%m/%y")
+class(tsla$Date)
+head(tsla$Date)
+#Checking the null values in the dataset
+apply(tsla,2,function(x) sum(is.na(x)))
+#we get the number of null values to be 0
+```
+
+## **C. PreProcessing Data**
+
+Since this is a timeseries data we converted the date column into date class using the function as.date and also checked the number of null values present in the dataset and remove them or impute them accordingly.There are 0 Null values in the dataset. Here the values for Close and Adj.Close are similar and hence the Adj.Close column can be removed from the dataset or it can be retained as it does not effect our calculations. Here, the format indicates the format of date column. There is no much preprocessing necessary for the dataset.
+
+
+\newpage
+
+```{r eda open price, echo=TRUE, message=FALSE, warning=FALSE}
+#Perfoming some EDA on the dataset to see the relation between variables across the years using ggplot.
+
+#Plot between Open Price and Year
+ggplot(data = tsla, aes(x = Date, y = Open)) +
+      geom_line(stat = "identity") +
+      labs(title = "Opening Price of TSLA stock  ",
+          x = "Year", y = "Open Price in USD")
+```
+
+## **D. Exploratory Data Analysis**
+The below plot shows the time series plot of Close price value across the period of years 2010 to 2020. The plot has constant Close price value until 2012 and it spiked in year 2013 then increased gradually till 2019. But, there is a sudden spike of the value in the year 2020.
+
+
+
+
+```{r eda close price, echo=FALSE}
+
+#Plot between Close Price and Year
+ggplot(data = tsla, aes(x = Date, y = Close)) +
+      geom_line(stat = "identity",color="#00AFBB",size = 1) +
+      labs(title = "Closing Price of TSLA stock from 2010-2020 ",
+          x = "Year", y = "Close Price in USD")
+```
+
+\newpage
+
+```{r eda volume vs year, echo=FALSE, message=FALSE, warning=FALSE}
+#Plot between Volume of stocks and Year
+ggplot(data = tsla, aes(x = Date, y = Volume)) +
+      geom_line(stat = "identity",color="#FC4E07",size = 1) +
+  geom_smooth() +
+ scale_x_date(date_breaks = "2 years",labels = date_format("%b-%y"))+
+  labs(title = "Volume of TSLA stocks traded in month of January for every two  ",
+          x = "Year", y = "Volume of stocks")
+```
+
+```{r eda, echo=TRUE}
+#Plot between variables and year
+  df <- tsla %>%
+  dplyr::select(Date, Open, Close, Low,High) %>%
+  gather(key = "variable", value = "value", -Date)
+ggplot(df, aes(x = Date, y = value)) + 
+  geom_line(aes(color = variable), size = 1) +
+  scale_color_manual(values = c("#669999", "#FC4E07","#FF9999","#FF9900")) +
+   labs(title = "Variation of variables across the years from 2010-2020 ",
+          x = "Year", y = "Price in USD")
+```
+  
+```{r eda correlation, echo=TRUE}
+#Correlation of tsla dataset
+tsla1 <- tsla[,-c(1)]
+cor(tsla1)
+corrplot::corrplot(cor(tsla1),method = "circle", type = "upper", tl.srt = 65,tl.col = "black")
+```
+
+```{r eda Boxplotvolume, echo=TRUE}
+#Boxplot of Volume of stocks traded between 2010-2020
+boxplot(tsla$Volume,main = "Boxplot of Volume of TSLA stocks traded between 2010-2020",ylab= "Volume of stocks")
+```
+
+```{r eda Outliers, echo=TRUE}
+
+#To find the number of outliers in the above boxplot generated.
+out <- boxplot.stats(tsla$Volume)$out
+out_ind <- which(tsla$Volume %in% c(out))
+tsla[out_ind,]
+```
+The below plot shows the boxplot of Variables Open,High,Low,Close. There are outliers present in the plot which can not be neglected in this case as they are useful in the calculations and analysis of the model. These outliers are present due to the sudden spike of values in the year 2020 due to several external factors. Notice that the high value has one outlier which is beyond the outlier interval and that could be the value of Maximum of High price value between years 2010 to 2020. The outlier interval ranges from 110 till 300.
+
+
+
+
+```{r eda Boxplot, echo=TRUE}
+#to draw the box plot of close, open, high, low prices.
+close <- tsla$Close
+open <- tsla$Open
+high <- tsla$High
+low <- tsla$Low
+
+boxplot(open,close,high,low,names = c("Open","Close","High","Low"),col = "Grey",main="Boxplot of Open,Close,High,Low")
+```
+\newpage
+
+This plot shows the variation of Close price across the years. The plots are created using facet in order to plot the values across each year. From the plot it can be observed that close price value is constant in years 2010, 2011, 2012. The Close price value spiked by a large value in the year 2020. In the year 2020 the value spiked upto $340.
+
+
+
+
+```{r EDA Yearwise Analysis, echo=TRUE}
+# Decomposing the time series year-wise and month-wise to analyse further
+tsla$Date<-parse_date_time(tsla$Date,'%Y/%m/%d')
+tsla$Year<-year(tsla$Date)
+tsla$Month<-month(tsla$Date)
+tsla$Weekday<-day(tsla$Date)
+
+#Plotting the close price of Tsla stock every year using facet.
+tsla %>%
+ggplot(aes(x = Date, y = Close)) +
+      geom_point(color = "darkorchid4") +
+      facet_wrap( ~ Year ) +
+      labs(title = "TSLA Stock Price Value",
+           subtitle = "Plots between Close Price vs Year",
+           y = "Price ($)",
+           x = "Year") + theme_bw(base_size = 10)
+
+
+
+```
+
+\newpage
+
+These are plots that shows the variation of volume of TSLA stocks traded each month of every year. The x-axis ranges from 2010 - 2020. From the plots it is observed that the highest volume of stocks are traded in the month of february in year 2020. Also it is observed there are few spiked values in volume of stocks traded in the year 2013. The volume of stocks traded is not constant across the years. The variation of volume of stocks is due to several factors including the external factors.
+
+
+```{r Eda Volume Analysis, echo=FALSE}
+mymonths <-c("January","February","March",
+              "April","May","June",
+              "July","August","September",
+              "October","November","December")
+tsla$Months <- mymonths[tsla$Month]
+tsla$Months <-factor(tsla$Months,levels = c("January","February","March",
+              "April","May","June",
+              "July","August","September",
+              "October","November","December"))
+ggplot(tsla, aes(x=Year, y = Volume)) +
+  geom_line(color="grey") +
+  geom_point(color="black") +
+  facet_wrap(~Months) + 
+  theme_minimal(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 45, 
+                                   hjust = 1)) +
+  labs(title = "Plots of Volume of TSLA Stocks traded.",subtitle = "Every month from 2010-2020.",
+       x = "Year",
+       y = "Volume of Stocks traded")+scale_x_continuous(breaks = pretty_breaks())
+```
+\newpage
+
+```{r eda Piechart, echo=TRUE}
+
+total <- aggregate(Volume~Year ,tsla,sum)
+
+names(total)[2] <- 'volume'
+ggplot(total,aes(x="", y=volume,fill=Year)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0)
+
+```
+
+
+```{r plots, echo=TRUE}
+plot(x=open,y=close)
+plot(x=high,y=close)
+plot(x=low,y=close)
+```
+
+## **E. Empirical Analysis**
+ 
+In the Multiple Linear regression model, I’m going to estimate the TSLA Close price value based on the Open, High and Close value. It is observed that the p value of f statistic is highly significant which indicates that there is one predictor variable which is strongly correlated to the output variable.The intercepts of High and Low price values are significant whereas, The open Price value is insignificant. Hence, I excluded the open price and generated the model again. Based on the summary it can interpreted that on a particular day for a fixed high Price value an increase in **$25 of Low price value leads to increase in Close price value by 0.58x25 = $14.5.**
+The adjusted R2 = 0.99, meaning that “99% of the variance in the measure of close price can be predicted by high price value and low price value TSLA stocks.In the above multiple regression model , **the RSE is 1.248 corresponding to 2% error rate.**	
+
+```{r multiplelinearregression, echo=TRUE}
+#Plot between variables and year
+model <- lm(close~open+high+low,data = tsla)
+summary(model)
+#Removing Open price value in the model as it is insignificant.
+finalmodel <- lm(close~high+low,data = tsla)
+summary(finalmodel)
+sigma(finalmodel)/mean(tsla$Close)
+```
+\newpage
+
+Another model I’m going to perform is ARIMA model. Since this is a time series data, using the ARIMA i'm going to forecast the TSLA stock close price value in future. On analyzing the time series graph it can be clearly seen that there is trend in the series and variance across few intervals. Also, On observing the ACF and PACF plots it can be concluded that the series is not stationary as the ACF plot has exponentially decreasing trend and PACF plot has one spike at one lag value. Hence the variance can be stabilized by taking logarithmic of the data. The Overall mean of the curve is stabilized by taking the first difference. The stationarity can be found out by doing kpss test. The higher P value indicates that the curve is stationary. Here, the p value is 0.1 and hence not rejecting the null hyopothesis. Then, The ACF and PACF plots of the differenced data indicate that there is white noise. Hence the model parameters are estimated as (0,1,0). After the running the choosed model and also forcing arima to choose the model the parameter values are similar. The AICC values are same for both the models. The residuals of the model are displayed. The ACF plot of residuals shows all the lags inside the interval which indicate that there is white noise and all the information is captured and hence the forecasting can be done to predict the future TSLA stock close price value. The histogram of the residuals approximately shows the normal distribution. The forecast shows the prediction for 100 days which predicts darker area is 85% confidence interval and Lighter area is 90% confidence interval and the prediction for 100 days show that there will be increase in the TSLA Stock close price value. 
+
+```{r timeseries tibble conversion, echo=TRUE}
+
+pacman::p_load(fpp3, patchwork, purrr,fpp2,knitr, forecast, ggplot2, rmarkdown,fabletools) 
+theme_set(theme_classic())
+
+ 
+tslanew <- tsla[,c(1,5)]
+#Converting the data to tsibble
+data <- as_tsibble(tslanew,regular = FALSE)
+class(data)
+tsl <- data %>%
+  mutate(trading_day = row_number()) %>%
+  update_tsibble(index = trading_day, regular = TRUE) 
+tsl <- tsl[,c(2,3)]
+tsl %>% autoplot(Close) + ylab("Tsla closing stock price") + xlab("Day")
+tsl %>% autoplot(box_cox(Close,0.054)) +
+  labs(y = "Box-Cox transformed Price")
+tsl %>% autoplot(log(Close)) + ylab("Tsla closing stock price in logarithm value") + xlab("Trading Day")
+```
+
+## ACF and PACF plots
+
+
+```{r timeseries ACF, echo=FALSE, fig.height=3.5, fig.width=3.5}
+#Plotting the ACF and PACF plots
+tsl %>% ACF(Close) %>% autoplot()
+tsl %>% PACF(Close) %>% autoplot()
+```
+
+
+```{r timeseries stabilizing, echo=TRUE, message=FALSE, warning=FALSE}
+# Stabilizing the Time Series Curve
+tsl %>% features(log(Close), unitroot_ndiffs)
+tsl%>% autoplot(difference(log(Close)))+
+  ylab("Change in Tsla closing stock price ($USD)") +
+  xlab("Day")
+
+```
+
+
+```{r timeseries ACF and PACF, echo=TRUE}
+# Plotting the ACF and PACF plot of differenced data
+tsl %>% ACF(difference(log(Close)))%>% autoplot()
+tsl %>% PACF(difference(log(Close))) %>% autoplot()
+tsl %>%
+  mutate(diff_close = difference(log(Close))) %>%
+  features(diff_close, unitroot_kpss)
+```
+
+```{r timeseries ARIMA, echo=TRUE}
+# Fitting the ARIMA model
+fit <- tsl %>% model(arima = ARIMA(log(Close) ~ pdq(0, 1, 0)))
+report(fit)
+tsl%>% model(ARIMA(log(Close) ~ pdq(d=1))) %>% report()
+tsl%>% 
+  model(ARIMA(log(Close) ~ pdq(d=1), stepwise = FALSE, approximation = FALSE)) %>%
+  report()
+```
+
+## ACF plot of Residuals
+```{r timeseries residuals, echo=FALSE, fig.height=3, fig.width=3}
+# Plotting the Residuals
+gg_tsresiduals(fit)
+```
+
+## Forecasting the time series,(h=100)days
+
+```{r timeseries forecast, echo=FALSE}
+#Forecasting the ARIMA model
+
+fit %>% forecast(h = 100) %>% autoplot(tsl) + xlab("Trading Day") + ylab("Closing Price of TSLA Stock")
+```
+
+\newpage
+
+### **F. Conclusions**
+
+Using TSLA dataset from yahoo finance, i analyzed the relationship between the close variable and other variables and how other varibales affect the close price value. The multiple linear regression model predcits that “99% of the variance in the measure of close price can be predicted by high price value and low price value TSLA stocks.
+The forecast of ARIMA model shows the prediction for 100 days and there will be increase in the TSLA Stock close price value. 
+ARIMA model has been used extensively in the field of finance and economics as it is known to be robust, efficient and has a strong potential for short-term share market prediction.
+All investments and trading in the stock market involve risk. Any decisions to place trades in the financial markets, including trading in stock or options or other financial instruments is a personal decision that should only be made after thorough research, including a personal risk and financial assessment.
+
+### **G. Sources**
+
+* [https://finance.yahoo.com/quote/TSLA/history?period1=1281830400&period2=1597449600&interval=1d&filter=history&frequency=1d&includeAdjustedClose=true]  
+
+* [https://www.earthdatascience.org/courses/earth-analytics/time-series-data/date-class-in-r/]
+
+* [https://rpubs.com/kapage/523169]
+
+* [http://www.sthda.com/english/articles/40-regression-analysis/168-multiple-linear-regression-in-r/]
